@@ -1,0 +1,58 @@
+/* =================================================================
+   Kick Alerts (Official) — video/sound alert box.
+   Hidden by default; .is-active drives the in/out animation set by
+   the animationIn/animationOut fields (widget.js toggles the class
+   and reads the field value to pick which keyframes apply).
+   ================================================================= */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.ka-box {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.92);
+}
+
+.ka-box.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.ka-box.anim-fadeIn.is-active { animation: kaFadeIn 320ms ease-out forwards; }
+.ka-box.anim-fadeOut:not(.is-active) { animation: kaFadeOut 320ms ease-in forwards; }
+.ka-box.anim-scaleIn.is-active { animation: kaScaleIn 320ms cubic-bezier(.2,.8,.3,1.2) forwards; }
+.ka-box.anim-scaleOut:not(.is-active) { animation: kaScaleOut 260ms ease-in forwards; }
+
+@keyframes kaFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kaFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes kaScaleIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+@keyframes kaScaleOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9); } }
+
+.ka-video {
+  max-width: 92vw;
+  max-height: 70vh;
+}
+
+.ka-video:not([src]) {
+  display: none;
+}
+
+.ka-text {
+  font: 700 28px/1.3 system-ui, sans-serif;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+  text-align: center;
+  max-width: 90vw;
+}

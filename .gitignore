@@ -5,6 +5,7 @@ dist/
 .env
 .env.*
 relay/.env
+relay/data/
 .cache/
 .agents/
 .claude/

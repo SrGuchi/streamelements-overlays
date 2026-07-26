@@ -29,3 +29,7 @@ jobs:
             widget/widget.css
             widget/widget.js
             widget/widget.json
+            widget-kick-alerts/widget.html
+            widget-kick-alerts/widget.css
+            widget-kick-alerts/widget.js
+            widget-kick-alerts/widget.json

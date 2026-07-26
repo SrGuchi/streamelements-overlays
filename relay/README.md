@@ -53,3 +53,58 @@ The relay accepts a numeric id as the channel value and skips the lookup entirel
   Pusher app key or URL, only that file needs updating.
 - One Kick connection is shared per chatroom across all connected widgets.
 - Empty chatrooms are closed immediately when the last widget disconnects.
+
+## Official Kick alerts (OAuth + webhooks)
+
+Follow / subscription / gift-sub / Kicks-tip alerts use Kick's **official**
+public API (OAuth 2.1 + PKCE, signed webhooks) instead of the unofficial
+Pusher bridge above — see `src/kickAuth.js` and `src/kickWebhook.js`. These
+feed a separate widget, [`widget-kick-alerts/`](../widget-kick-alerts/), over
+a distinct relay WebSocket channel (`platform: 'kick-alerts'`).
+
+### Env vars
+
+| Var | Required | Default |
+|---|---|---|
+| `KICK_CLIENT_ID` | yes | — (set on Railway) |
+| `KICK_CLIENT_SECRET` | yes | — (set on Railway) |
+| `KICK_REDIRECT_URI` | no | `https://streamelements-overlays-production.up.railway.app/callback` |
+| `KICK_TOKEN_PATH` | no | `relay/data/kick-tokens.json` |
+
+### One-time setup
+
+1. Make sure a Kick app exists in the [Kick Developer Portal](https://kick.com/settings/developer)
+   with its **redirect URL** set to `<your-domain>/callback` and **webhook URL**
+   set to `<your-domain>/kick/webhook`, with the `user:read`, `channel:read`,
+   `events:subscribe`, and `kicks:read` scopes enabled.
+2. **As the streamer**, logged into your Kick account in a browser, visit:
+   `https://<your-app>.up.railway.app/kick/authorize?token=<RELAY_TOKEN>`
+   (the `?token=` query param is only required if `RELAY_TOKEN` is set).
+3. You'll be redirected to Kick to authorize the app, then bounced back to a
+   confirmation page ("✅ Kick conectado"). This persists the access/refresh
+   tokens and automatically subscribes to the follow/sub/gift/Kicks webhook
+   events — no further action needed.
+4. Repeat this step only if the token file is lost (see below) or you need to
+   re-authorize after revoking access on Kick's side.
+
+### ⚠️ Railway Volume required
+
+Railway's container filesystem is **ephemeral** — a redeploy wipes anything
+not on a mounted Volume. Without one, `relay/data/kick-tokens.json` (or your
+`KICK_TOKEN_PATH`) is lost on every redeploy and you'll have to redo step 2
+above each time. To avoid that:
+
+1. In the Railway dashboard, open the relay service → **Volumes** → **New
+   Volume**.
+2. Mount it at the **directory** containing `KICK_TOKEN_PATH` (default:
+   `/app/data`, since the service runs from `relay/` and the default token
+   path is `relay/data/kick-tokens.json`).
+3. Redeploy. Tokens now survive future redeploys and restarts.
+
+### Webhook delivery
+
+`/kick/webhook` is called directly by Kick (already configured in the
+Developer Portal) — no manual action needed. Every request's signature is
+verified (`RSA-SHA256` against Kick's public key) before any event is
+broadcast; unsigned or tampered requests are rejected with a non-200 so Kick
+doesn't mistake a forged request for success.

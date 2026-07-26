@@ -20,10 +20,51 @@
 'use strict';
 
 const http = require('http');
+const path = require('path');
+const crypto = require('crypto');
 const { WebSocketServer, WebSocket } = require('ws');
+const {
+  pkceChallenge,
+  createAuthorizeUrl,
+  createPendingAuthStore,
+  exchangeCodeForToken,
+  saveTokens,
+  fetchBroadcasterUserId,
+  subscribeToEvents,
+} = require('./kickAuth');
+const { getPublicKey, verifyKickSignature, normalizeKickEvent } = require('./kickWebhook');
 
 const PORT = process.env.PORT || 8080;
 const RELAY_TOKEN = process.env.RELAY_TOKEN || '';
+
+// ---- Kick official API (OAuth + webhooks) — see kickAuth.js/kickWebhook.js ----
+const KICK_CLIENT_ID = process.env.KICK_CLIENT_ID || '';
+const KICK_CLIENT_SECRET = process.env.KICK_CLIENT_SECRET || '';
+const KICK_REDIRECT_URI = process.env.KICK_REDIRECT_URI
+  || 'https://streamelements-overlays-production.up.railway.app/callback';
+const KICK_TOKEN_PATH = process.env.KICK_TOKEN_PATH
+  || path.join(__dirname, '..', 'data', 'kick-tokens.json');
+
+const pendingKickAuth = createPendingAuthStore();
+const kickAlertClients = new Set();
+
+const KICK_CALLBACK_SUCCESS_HTML = `<!doctype html><html lang="es"><meta charset="utf-8">
+<title>Kick conectado</title>
+<body style="font:16px system-ui;background:#0e0e10;color:#fff;display:grid;place-items:center;height:100vh;margin:0">
+<div style="text-align:center">
+<h1>✅ Kick conectado</h1>
+<p>Tu canal de Kick ya está autorizado y suscrito a las alertas (follows, subs, regalos, Kicks).</p>
+<p>Podés cerrar esta pestaña.</p>
+</div></body></html>`;
+
+const KICK_CALLBACK_ERROR_HTML = (msg) => `<!doctype html><html lang="es"><meta charset="utf-8">
+<title>Error</title>
+<body style="font:16px system-ui;background:#0e0e10;color:#fff;display:grid;place-items:center;height:100vh;margin:0">
+<div style="text-align:center">
+<h1>❌ Algo salió mal</h1>
+<p>${String(msg || '').replace(/</g, '&lt;')}</p>
+<p>Volvé a intentarlo desde <code>/kick/authorize</code>.</p>
+</div></body></html>`;
 
 // Kick's public Pusher app (same one kick.com uses in the browser).
 const KICK_PUSHER_URL =
@@ -233,18 +274,179 @@ function detachClientFromRooms(client, roomMap = rooms) {
   client._rooms.clear();
 }
 
+// ---------------------------------------------------------------
+//  Kick official-API alerts — flat client set (single-tenant: one app,
+//  one authorized broadcaster, so there's no per-room keying like chat).
+// ---------------------------------------------------------------
+function broadcastKickAlert(payload) {
+  const data = JSON.stringify({ type: 'kick-alert', payload });
+  for (const client of kickAlertClients) {
+    if (client.readyState === WebSocket.OPEN) client.send(data);
+  }
+}
+
+function collectRawBody(req, maxBytes = 1_000_000) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    req.on('data', (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) { req.destroy(); reject(new Error('payload too large')); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function sendHtml(res, status, html) {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
+}
+
+// GET /kick/authorize — one-time setup step the streamer visits (logged into
+// Kick) to kick off the OAuth+PKCE dance. Gated by RELAY_TOKEN the same way
+// widget subscribes are, so a public URL can't be hijacked by a stranger.
+async function handleKickAuthorize(req, res, url) {
+  if (!KICK_CLIENT_ID || !KICK_CLIENT_SECRET) {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('KICK_CLIENT_ID/KICK_CLIENT_SECRET not configured');
+    return;
+  }
+  if (RELAY_TOKEN && url.searchParams.get('token') !== RELAY_TOKEN) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+  const { verifier, challenge } = pkceChallenge();
+  const state = crypto.randomBytes(16).toString('hex');
+  pendingKickAuth.put(state, verifier);
+  const authorizeUrl = createAuthorizeUrl({
+    clientId: KICK_CLIENT_ID,
+    redirectUri: KICK_REDIRECT_URI,
+    state,
+    challenge,
+  });
+  res.writeHead(302, { Location: authorizeUrl });
+  res.end();
+}
+
+// GET /callback — Kick bounces the streamer back here with ?code&state.
+async function handleKickCallback(req, res, url) {
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+  const verifier = state && pendingKickAuth.take(state);
+  if (!code || !verifier) {
+    sendHtml(res, 400, KICK_CALLBACK_ERROR_HTML('Falta el código o el estado expiró — volvé a intentarlo.'));
+    return;
+  }
+  try {
+    const tokens = await exchangeCodeForToken({
+      code,
+      verifier,
+      redirectUri: KICK_REDIRECT_URI,
+      clientId: KICK_CLIENT_ID,
+      clientSecret: KICK_CLIENT_SECRET,
+    });
+    tokens.obtained_at = Date.now();
+    tokens.broadcaster_user_id = await fetchBroadcasterUserId(tokens.access_token).catch(() => null);
+    await saveTokens(KICK_TOKEN_PATH, tokens);
+
+    const sub = await subscribeToEvents({
+      accessToken: tokens.access_token,
+      broadcasterUserId: tokens.broadcaster_user_id,
+    }).catch((e) => ({ error: e.message }));
+    console.log('[kick] event subscription result:', JSON.stringify(sub));
+
+    sendHtml(res, 200, KICK_CALLBACK_SUCCESS_HTML);
+  } catch (e) {
+    console.error('[kick] OAuth callback failed:', e && e.message);
+    sendHtml(res, 500, KICK_CALLBACK_ERROR_HTML(e && e.message));
+  }
+}
+
+// POST /kick/webhook — Kick's signed event delivery. Only returns 200 after
+// the signature verifies; Kick retries 3x and auto-unsubscribes the event on
+// repeated failure, so a bad/forged request must NOT get a 200.
+async function handleKickWebhook(req, res) {
+  let rawBody;
+  try {
+    rawBody = await collectRawBody(req);
+  } catch {
+    res.writeHead(413); res.end(); return;
+  }
+
+  const messageId = req.headers['kick-event-message-id'];
+  const timestamp = req.headers['kick-event-message-timestamp'];
+  const signature = req.headers['kick-event-signature'];
+  const eventType = req.headers['kick-event-type'];
+  if (!messageId || !timestamp || !signature) {
+    res.writeHead(400); res.end(); return;
+  }
+
+  let publicKeyPem;
+  try {
+    publicKeyPem = await getPublicKey();
+  } catch (e) {
+    console.error('[kick] public key fetch failed:', e && e.message);
+    res.writeHead(503); res.end(); return;
+  }
+
+  const valid = verifyKickSignature({
+    messageId,
+    timestamp,
+    rawBody: rawBody.toString('utf8'),
+    signatureB64: signature,
+    publicKeyPem,
+  });
+  if (!valid) {
+    console.warn('[kick] webhook signature invalid — dropping');
+    res.writeHead(401); res.end(); return;
+  }
+
+  let data;
+  try {
+    data = JSON.parse(rawBody.toString('utf8'));
+  } catch {
+    res.writeHead(400); res.end(); return;
+  }
+
+  const alert = normalizeKickEvent(eventType, data);
+  if (alert) broadcastKickAlert(alert);
+  else console.warn('[kick] webhook: unrecognised event type:', eventType);
+
+  res.writeHead(200); res.end('ok');
+}
+
 // All server setup lives inside startServer() so that `require`-ing this file
 // (e.g. from relay/test.cjs) creates NO sockets, timers, or open handles — the
 // process can exit cleanly. Only running it directly starts the server.
 function startServer() {
   const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, rooms: rooms.size, uptime: process.uptime() }));
-      return;
-    }
-    res.writeHead(404);
-    res.end();
+    const url = new URL(req.url, 'http://internal');
+
+    const route = async () => {
+      if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          rooms: rooms.size,
+          kickAlertClients: kickAlertClients.size,
+          uptime: process.uptime(),
+        }));
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/kick/authorize') return handleKickAuthorize(req, res, url);
+      if (req.method === 'GET' && url.pathname === '/callback') return handleKickCallback(req, res, url);
+      if (req.method === 'POST' && url.pathname === '/kick/webhook') return handleKickWebhook(req, res);
+      res.writeHead(404);
+      res.end();
+    };
+
+    route().catch((e) => {
+      console.error('[http] unhandled error:', e && e.message);
+      try { if (!res.headersSent) { res.writeHead(500); res.end('Internal error'); } } catch {}
+    });
   });
 
   const wss = new WebSocketServer({ server });
@@ -270,6 +472,16 @@ function startServer() {
     client.on('message', async (buf) => {
       let msg;
       try { msg = JSON.parse(buf.toString()); } catch { return; }
+      if (msg && msg.type === 'subscribe' && msg.platform === 'kick-alerts') {
+        if (!isAuthorizedSubscribe(msg, RELAY_TOKEN)) {
+          client.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
+          client.close(1008, 'Unauthorized');
+          return;
+        }
+        kickAlertClients.add(client);
+        client.send(JSON.stringify({ type: 'subscribed', platform: 'kick-alerts' }));
+        return;
+      }
       if (msg && msg.type === 'subscribe' && msg.platform === 'kick') {
         if (!isAuthorizedSubscribe(msg, RELAY_TOKEN)) {
           client.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
@@ -295,6 +507,7 @@ function startServer() {
       else connectionCounts.set(ip, c - 1);
       // Clean up room subscriptions
       detachClientFromRooms(client);
+      kickAlertClients.delete(client);
     });
   });
 

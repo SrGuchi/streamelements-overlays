@@ -91,18 +91,20 @@ preset earns its depth from one intentional detail.
 | Source | Path |
 |---|---|
 | Twitch + YouTube + SE alerts | **native** via SE `onEventReceived` — no backend |
-| Kick | **Railway relay** → WebSocket → widget (`relay/`) |
+| Kick chat | **Railway relay** (unofficial Pusher bridge) → WebSocket → widget (`relay/`) |
+| Kick alerts (follow/sub/gift/Kicks) | **Railway relay** (official Kick OAuth + signed webhooks) → WebSocket → `widget-kick-alerts/` |
 | 7TV / BTTV / FFZ + pronouns | public CORS APIs, fetched **client-side** |
 
 ## Repo layout
 
 ```
-widget/    widget.html · widget.css · widget.json (Fields) · widget.js  ← deploy to SE
-preview/   index.html + mock-se.js   ← local SE event simulator
-relay/     Railway Node.js service (Kick ingest) — see relay/README.md
-test/      widget.test.cjs + harness.cjs (pure-Node unit tests, no jsdom)
-scripts/   serve.mjs (preview server) · build.mjs (validate + version stamp)
-.github/   CI (Node 18/20/22) + tag-triggered GitHub Releases
+widget/             widget.html · widget.css · widget.json (Fields) · widget.js  ← deploy to SE (chat overlay)
+widget-kick-alerts/ widget.html · widget.css · widget.json (Fields) · widget.js  ← deploy to SE (official Kick video alerts)
+preview/            index.html + mock-se.js   ← local SE event simulator
+relay/              Railway Node.js service (Kick chat + official Kick alerts) — see relay/README.md
+test/               widget.test.cjs + harness.cjs (pure-Node unit tests, no jsdom)
+scripts/            serve.mjs (preview server) · build.mjs (validate + version stamp)
+.github/            CI (Node 18/20/22) + tag-triggered GitHub Releases
 ```
 
 ## Install in StreamElements
@@ -132,6 +134,13 @@ scripts/   serve.mjs (preview server) · build.mjs (validate + version stamp)
      slug is blocked). Leave blank if you don't stream on Kick.
 5. **Use in OBS** — copy the overlay URL (**… → Copy URL**) into an OBS **Browser
    Source** at your canvas size.
+6. **(Optional) Official Kick alerts** — for a big video+sound alert box (follow /
+   sub / resub / gift subs / Kicks tips), driven by Kick's official OAuth + webhook
+   API rather than chat, install
+   [`widget-kick-alerts/`](widget-kick-alerts/) as a **second** Custom Widget (its
+   own OBS Browser Source), pointed at the **same** Relay WebSocket URL/token as the
+   chat widget. One-time setup on the relay side is documented in
+   [`relay/README.md`](relay/README.md#official-kick-alerts-oauth--webhooks).
 
 Field groups: Style · Layout · Typography · Username & Colors · Badges & Platform ·
 Roles & Highlights · Messages · Animations · Alerts · Sound · Effects · Advanced ·
@@ -167,7 +176,7 @@ prompt is not an officially documented StreamElements feature, so don't rely on 
 
 ## Status
 
-**Current: v1.3.0** · 128 fields · 13 setting groups · 86 widget tests + 11 relay
+**Current: v1.3.0** · 128 fields · 13 setting groups · 86 widget tests + 22 relay
 assertions · CI on push/PR (Node 18 / 20 / 22).
 
 **Roadmap:** public StreamElements library listing · TikTok + Ko-fi ingestion

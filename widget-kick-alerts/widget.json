@@ -1,0 +1,232 @@
+{
+  "relayUrl": {
+    "type": "text",
+    "label": "Relay WebSocket URL (Railway, wss://...)",
+    "value": "",
+    "group": "Connection"
+  },
+  "relayToken": {
+    "type": "text",
+    "label": "Relay access token (optional, matches RELAY_TOKEN)",
+    "value": "",
+    "group": "Connection"
+  },
+  "enableFollow": {
+    "type": "dropdown",
+    "label": "Enable · Follow",
+    "value": "yes",
+    "options": { "yes": "Yes", "no": "No" },
+    "group": "Follow"
+  },
+  "videoFollow": {
+    "type": "video-input",
+    "label": "Video · Follow",
+    "value": "",
+    "group": "Follow"
+  },
+  "soundFollow": {
+    "type": "sound-input",
+    "label": "Sound · Follow",
+    "value": "",
+    "group": "Follow"
+  },
+  "labelFollow": {
+    "type": "text",
+    "label": "Mensaje · Follow",
+    "value": "{name} empezó a seguir",
+    "group": "Follow"
+  },
+  "durationFollow": {
+    "type": "number",
+    "label": "Duración en pantalla (seg)",
+    "value": 6,
+    "group": "Follow"
+  },
+  "enableSub": {
+    "type": "dropdown",
+    "label": "Enable · Sub / Resub",
+    "value": "yes",
+    "options": { "yes": "Yes", "no": "No" },
+    "group": "Subscription"
+  },
+  "videoSub": {
+    "type": "video-input",
+    "label": "Video · Sub",
+    "value": "",
+    "group": "Subscription"
+  },
+  "soundSub": {
+    "type": "sound-input",
+    "label": "Sound · Sub",
+    "value": "",
+    "group": "Subscription"
+  },
+  "labelSub": {
+    "type": "text",
+    "label": "Mensaje · Sub",
+    "value": "{name} se suscribió",
+    "group": "Subscription"
+  },
+  "labelResub": {
+    "type": "text",
+    "label": "Mensaje · Resub",
+    "value": "{name} renovó su suscripción ({amount} meses)",
+    "group": "Subscription"
+  },
+  "durationSub": {
+    "type": "number",
+    "label": "Duración en pantalla (seg)",
+    "value": 8,
+    "group": "Subscription"
+  },
+  "enableGift": {
+    "type": "dropdown",
+    "label": "Enable · Gift subs",
+    "value": "yes",
+    "options": { "yes": "Yes", "no": "No" },
+    "group": "Gift Subs"
+  },
+  "videoGift": {
+    "type": "video-input",
+    "label": "Video · Gift sub",
+    "value": "",
+    "group": "Gift Subs"
+  },
+  "videoCommunityGift": {
+    "type": "video-input",
+    "label": "Video · Community gift (vacío = usa el video de Gift sub)",
+    "value": "",
+    "group": "Gift Subs"
+  },
+  "soundGift": {
+    "type": "sound-input",
+    "label": "Sound · Gift sub",
+    "value": "",
+    "group": "Gift Subs"
+  },
+  "labelGift": {
+    "type": "text",
+    "label": "Mensaje · Gift sub",
+    "value": "{sender} regaló una sub a {name}",
+    "group": "Gift Subs"
+  },
+  "labelCommunityGift": {
+    "type": "text",
+    "label": "Mensaje · Community gift",
+    "value": "{sender} regaló {count} subs",
+    "group": "Gift Subs"
+  },
+  "durationGift": {
+    "type": "number",
+    "label": "Duración en pantalla (seg)",
+    "value": 8,
+    "group": "Gift Subs"
+  },
+  "enableKicks": {
+    "type": "dropdown",
+    "label": "Enable · Kicks / Tips",
+    "value": "yes",
+    "options": { "yes": "Yes", "no": "No" },
+    "group": "Kicks / Tips"
+  },
+  "videoKicks": {
+    "type": "video-input",
+    "label": "Video · Kicks",
+    "value": "",
+    "group": "Kicks / Tips"
+  },
+  "soundKicks": {
+    "type": "sound-input",
+    "label": "Sound · Kicks",
+    "value": "",
+    "group": "Kicks / Tips"
+  },
+  "labelKicks": {
+    "type": "text",
+    "label": "Mensaje · Kicks ({amount} = cantidad)",
+    "value": "{name} envió {amount} Kicks",
+    "group": "Kicks / Tips"
+  },
+  "durationKicks": {
+    "type": "number",
+    "label": "Duración en pantalla (seg)",
+    "value": 8,
+    "group": "Kicks / Tips"
+  },
+  "globalVolume": {
+    "type": "slider",
+    "label": "Volumen (video + sonido)",
+    "value": 80,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "group": "Playback"
+  },
+  "queueGapMs": {
+    "type": "number",
+    "label": "Pausa entre alertas (ms)",
+    "value": 300,
+    "group": "Playback"
+  },
+  "animationIn": {
+    "type": "dropdown",
+    "label": "Animación de entrada",
+    "value": "fadeIn",
+    "options": { "none": "Ninguna", "fadeIn": "Fade", "scaleIn": "Escala" },
+    "group": "Playback"
+  },
+  "animationOut": {
+    "type": "dropdown",
+    "label": "Animación de salida",
+    "value": "fadeOut",
+    "options": { "none": "Ninguna", "fadeOut": "Fade", "scaleOut": "Escala" },
+    "group": "Playback"
+  },
+  "debugMode": {
+    "type": "dropdown",
+    "label": "Debug mode (console logs)",
+    "value": "no",
+    "options": { "yes": "Yes", "no": "No" },
+    "group": "Advanced"
+  },
+  "testFollow": {
+    "type": "widget-button",
+    "label": "Probar: Follow",
+    "value": "",
+    "group": "Advanced"
+  },
+  "testSub": {
+    "type": "widget-button",
+    "label": "Probar: Sub",
+    "value": "",
+    "group": "Advanced"
+  },
+  "testGift": {
+    "type": "widget-button",
+    "label": "Probar: Gift",
+    "value": "",
+    "group": "Advanced"
+  },
+  "testKicks": {
+    "type": "widget-button",
+    "label": "Probar: Kicks",
+    "value": "",
+    "group": "Advanced"
+  },
+  "widgetName": {
+    "type": "hidden",
+    "value": "Kick Alerts (Official)"
+  },
+  "widgetAuthor": {
+    "type": "hidden",
+    "value": "ahmetenesdur"
+  },
+  "widgetVersion": {
+    "type": "hidden",
+    "value": "0.1.0"
+  },
+  "widgetUpdateUrl": {
+    "type": "hidden",
+    "value": "https://github.com/ahmetenesdur/streamelements-overlays/blob/main/widget-kick-alerts/"
+  }
+}
