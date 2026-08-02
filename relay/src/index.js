@@ -483,11 +483,9 @@ function startServer() {
         return;
       }
       if (msg && msg.type === 'subscribe' && msg.platform === 'kick') {
-        if (!isAuthorizedSubscribe(msg, RELAY_TOKEN)) {
-          client.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
-          client.close(1008, 'Unauthorized');
-          return;
-        }
+        // Chat stays open without a token — only the official alerts route
+        // (kick-alerts) and the OAuth setup step are gated by RELAY_TOKEN.
+        // This keeps old widgets working even if RELAY_TOKEN is set/rotated.
         const chatroomId = await resolveChatroomId(msg.channel);
         if (!chatroomId) {
           client.send(JSON.stringify({ type: 'error', error: 'kick_channel_unresolved', channel: msg.channel }));
